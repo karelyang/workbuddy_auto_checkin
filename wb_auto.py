@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""wb_auto.py —— 云端 runner 执行的每日自动化：签到 + 派猫猫旅行，结果推送到企业微信（兼容飞书）。
+"""wb_auto.py —— 云端 runner 执行的每日自动化：签到 + 派猫猫旅行，结果推送企业微信 / 个人微信（WxPusher）/ 飞书。
 
 设计要点：
   1. 一次运行把签到与派猫都做掉；
@@ -296,10 +296,17 @@ def run_buddy(headers, endpoint):
 # 推送渠道按优先级自动选择：企业微信群机器人 → 企业微信应用消息 → 飞书。
 # 三个渠道互相独立；全部未配置时只打日志、不推送。
 
-def build_notify_markdown(checkin_line, buddy_line, overall_ok):
-    """生成通知正文（企业微信 markdown 方言）。"""
-    status = ('<font color="info">成功</font>' if overall_ok
-              else '<font color="warning">部分失败</font>')
+def build_notify_markdown(checkin_line, buddy_line, overall_ok, wecom_style=True):
+    """生成通知正文（markdown）。
+
+    wecom_style=True 用企业微信的字体颜色标签；其它渠道（如 WxPusher）
+    传 False，避免 HTML 标签在标准 markdown 里被转义成明文。
+    """
+    if wecom_style:
+        status = ('<font color="info">成功</font>' if overall_ok
+                  else '<font color="warning">部分失败</font>')
+    else:
+        status = "✅ 成功" if overall_ok else "⚠️ 部分失败"
     return "\n".join([
         "**Buddy 加油站 · 每日自动化**",
         "",
@@ -406,6 +413,35 @@ def push_feishu(webhook, title, checkin_line, buddy_line, overall_ok):
         return False
 
 
+def push_wxpusher(app_token, uids, checkin_line, buddy_line, overall_ok):
+    """推送到个人微信（经 WxPusher 服务号模板消息）。
+
+    wxpusher.zjiecode.com 微信扫码登录 → 创建应用拿 AppToken（AT_ 开头），
+    用应用二维码让微信关注后拿 UID（UID_ 开头）。云端 SaaS：
+    无常开设备、无可信 IP 限制，GitHub Actions 上可直接调用。
+    uids 可传字符串（| 或逗号分隔）或列表。
+    """
+    if isinstance(uids, str):
+        uid_list = [u.strip() for u in uids.replace(",", "|").split("|") if u.strip()]
+    else:
+        uid_list = [str(u).strip() for u in uids if str(u).strip()]
+    if not uid_list:
+        log("  [WxPusher] 未配置 UID，跳过推送")
+        return False
+    payload = {
+        "appToken": app_token,
+        "content": build_notify_markdown(checkin_line, buddy_line, overall_ok,
+                                          wecom_style=False),
+        "summary": "Buddy 加油站 · %s" % ("成功" if overall_ok else "部分失败"),
+        "contentType": 3,
+        "uids": uid_list,
+    }
+    scode, body = post("https://wxpusher.zjiecode.com/api/send/message",
+                       {"Content-Type": "application/json"}, payload)
+    log("  [WxPusher] HTTP %s %s" % (scode, json.dumps(body, ensure_ascii=False)))
+    return (200 <= scode < 300 and isinstance(body, dict) and body.get("code") == 1000)
+
+
 # ---------------------------------------------------------------- 主流程
 
 def main():
@@ -416,14 +452,17 @@ def main():
     wecom_corpsecret = os.environ.get("WECOM_CORPSECRET")
     wecom_agentid = os.environ.get("WECOM_AGENTID")
     wecom_touser = os.environ.get("WECOM_TOUSER") or "@all"
+    wxpusher_token = os.environ.get("WXPUSHER_APPTOKEN")
+    wxpusher_uids = os.environ.get("WXPUSHER_UIDS")
     feishu_webhook = os.environ.get("FEISHU_WEBHOOK")
     endpoint = os.environ.get("WB_ENDPOINT") or DEFAULT_ENDPOINT
 
     if not token:
         log("缺少环境变量 WB_ACCESS_TOKEN（请在本机运行 refresh_token.py 注入 GitHub Secret）")
         return 2
-    if not (wecom_webhook or (wecom_corpid and wecom_corpsecret and wecom_agentid) or feishu_webhook):
-        log("未配置推送渠道（WECOM_WEBHOOK 或 WECOM_CORPID+WECOM_CORPSECRET+WECOM_AGENTID 或 FEISHU_WEBHOOK），本轮仅打印日志")
+    if not (wecom_webhook or (wecom_corpid and wecom_corpsecret and wecom_agentid)
+            or wxpusher_token or feishu_webhook):
+        log("未配置推送渠道（WECOM_WEBHOOK / WECOM_ 应用四件套 / WXPUSHER_APPTOKEN / FEISHU_WEBHOOK），本轮仅打印日志")
 
     headers = {
         "Accept": "application/json",
@@ -449,12 +488,15 @@ def main():
     checkin_line = ("✅ " if checkin_ok else "❌ ") + checkin["report"]
     buddy_line = ("🐱 " + buddy.get("report", "")) if buddy.get("report") else "🐱 无结论"
 
+    # 各渠道互相独立：配了哪个走哪个，可多渠道并存（如企业微信 + 个人微信同时收）
     if wecom_webhook:
         push_wecom_webhook(wecom_webhook, checkin_line, buddy_line, overall_ok)
     elif wecom_corpid and wecom_corpsecret and wecom_agentid:
         push_wecom_app(wecom_corpid, wecom_corpsecret, wecom_agentid, wecom_touser,
                        checkin_line, buddy_line, overall_ok)
-    elif feishu_webhook:
+    if wxpusher_token:
+        push_wxpusher(wxpusher_token, wxpusher_uids, checkin_line, buddy_line, overall_ok)
+    if feishu_webhook:
         push_feishu(feishu_webhook, "每日自动化", checkin_line, buddy_line, overall_ok)
 
     result = {

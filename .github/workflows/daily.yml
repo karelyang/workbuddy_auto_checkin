@@ -58,6 +58,9 @@ jobs:
           WECOM_TOUSER: ${{ secrets.WECOM_TOUSER }}
           # 飞书（兼容旧配置，优先级最低）
           FEISHU_WEBHOOK: ${{ secrets.FEISHU_WEBHOOK }}
+          # 个人微信（经 WxPusher 服务号；与其它渠道独立，可并存）
+          WXPUSHER_APPTOKEN: ${{ secrets.WXPUSHER_APPTOKEN }}
+          WXPUSHER_UIDS: ${{ secrets.WXPUSHER_UIDS }}
           WB_ENDPOINT: https://copilot.tencent.com
           WB_RESULT_FILE: ${{ runner.temp }}/wb_result.json
         run: |

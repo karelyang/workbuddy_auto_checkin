@@ -1,6 +1,6 @@
 # workbuddy_auto_checkin
 
-WorkBuddy「Buddy 加油站」的每日自动化：**签到领积分**、**派猫猫旅行并领回礼物**，结果推送到企业微信（兼容飞书）。
+WorkBuddy「Buddy 加油站」的每日自动化：**签到领积分**、**派猫猫旅行并领回礼物**，结果推送到企业微信、个人微信（WxPusher）或飞书。
 
 跑在 GitHub Actions 上，按 cron 每天定时执行，不需要任何常开设备。
 
@@ -45,6 +45,7 @@ WorkBuddy「Buddy 加油站」的每日自动化：**签到领积分**、**派�
 - 一个 GitHub 账号
 - 一台装过 WorkBuddy **并且登录过**的电脑（只在配置时用一次）
 - 一个企业微信账号（个人可以注册一个只有自己的企业），建一个只有自己的群加自定义机器人，用来收消息
+- 或一个 WxPusher 账号（wxpusher.zjiecode.com 微信扫码登录即可），消息直达个人微信
 - 电脑上有 Python 3.8+
 
 ### 容易搞混的一点，先说清楚
@@ -84,7 +85,7 @@ WorkBuddy「Buddy 加油站」的每日自动化：**签到领积分**、**派�
 3. 群设置 → **群机器人** → **添加机器人** → **自定义机器人**
 4. 复制它给你的地址，形如 `https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`（只复制 `key=` 后面那一串也可以，脚本会自动补全地址）
 
-> 不想建群、想把消息发到自己手机上？可以用企业微信「自建应用消息」渠道，四件套配置见 [部署指南-企业微信.md](部署指南-企业微信.md) 方案 B。
+> 不想建群、想把消息发到自己手机上？可以用企业微信「自建应用消息」渠道（方案 B），或 WxPusher 直达个人微信（方案 C，代码已内置，无常开设备、无可信 IP 限制），详见 [部署指南-企业微信.md](部署指南-企业微信.md)。
 
 ### 第 4 步：导出登录凭证（二选一）
 
@@ -150,6 +151,8 @@ python refresh_token.py
 | `WECOM_AGENTID` | 备选 | — | 企业微信自建应用 AgentId |
 | `WECOM_TOUSER` | 否 | `@all` | 应用消息的接收人 UserID，多个用 `|` 分隔；默认应用可见范围全员 |
 | `FEISHU_WEBHOOK` | 兼容 | — | 飞书自定义机器人地址（旧配置仍有效，优先级最低） |
+| `WXPUSHER_APPTOKEN` | 否 | — | WxPusher 应用 token（个人微信渠道，与其它渠道独立，可并存） |
+| `WXPUSHER_UIDS` | 否 | — | WxPusher 接收人 UID，多个用 `\|` 分隔 |
 | `WB_ENDPOINT` | 否 | `https://copilot.tencent.com` | 接口地址 |
 | `WB_RESULT_FILE` | 否 | — | 写入 Markdown 汇总表，供 Actions 的 step summary 使用 |
 
@@ -232,6 +235,8 @@ refresh_token.py              本机一次性操作：导出 token / 写入 Secr
 **Actions 页签看不到 workflow** — 确认 `.github/workflows/daily.yml` 已入库，且仓库的 Actions 功能未被禁用。
 
 **企业微信没收到消息** — 日志中 `[企业微信]` 行会打印服务端返回。`errcode` 非 0 即未送达：`93000` 多为 key 无效或地址复制不完整，`45009` 为触发机器人限速（本脚本日频不会触发）；也确认机器人仍在群里。
+
+**个人微信没收到消息（WxPusher）** — 日志中 `[WxPusher]` 行会打印服务端返回，`code` 为 `1000` 才是成功；非 1000 按官网文档排查（常见于 AppToken 填错、UID 未关注应用）。WxPusher 无 IP 白名单，Actions 上可直接调用。
 
 **偶发 302** — 高频轮询旅行状态时网关会短暂跳转，请求层已对 3xx 退避重试。按日频执行不会触发。
 
