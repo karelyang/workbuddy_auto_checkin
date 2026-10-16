@@ -274,7 +274,7 @@ def main():
         raise SystemExit("凭据文件缺少 accessToken，请先在 WorkBuddy 登录")
 
     if isinstance(token, str):
-        print(token)
+        pass  # 明文 token 统一在下方出口打印一次，避免重复输出
     else:
         exe = find_runtime()
         sys.stderr.write("凭据为加密信封，正在通过本机客户端解密…\n")
