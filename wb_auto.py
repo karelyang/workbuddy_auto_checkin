@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""wb_auto.py —— 云端 runner 执行的每日自动化：签到 + 派猫猫旅行，结果推飞书。
+"""wb_auto.py —— 云端 runner 执行的每日自动化：签到 + 派猫猫旅行，结果推送到企业微信（兼容飞书）。
 
 设计要点：
   1. 一次运行把签到与派猫都做掉；
@@ -16,6 +16,7 @@ import os
 import ssl
 import sys
 import urllib.error
+import urllib.parse
 import urllib.request
 
 DEFAULT_ENDPOINT = "https://copilot.tencent.com"
@@ -291,10 +292,85 @@ def run_buddy(headers, endpoint):
         return {"result": "ERROR", "report": "猫猫模块异常（%s: %s）" % (type(e).__name__, e), "notes": notes}
 
 
-# ---------------------------------------------------------------- 飞书
+# ---------------------------------------------------------------- 消息推送
+# 推送渠道按优先级自动选择：企业微信群机器人 → 企业微信应用消息 → 飞书。
+# 三个渠道互相独立；全部未配置时只打日志、不推送。
+
+def build_notify_markdown(checkin_line, buddy_line, overall_ok):
+    """生成通知正文（企业微信 markdown 方言）。"""
+    status = ('<font color="info">成功</font>' if overall_ok
+              else '<font color="warning">部分失败</font>')
+    return "\n".join([
+        "**Buddy 加油站 · 每日自动化**",
+        "",
+        "**签到**",
+        checkin_line,
+        "",
+        "**猫猫旅行**",
+        buddy_line,
+        "",
+        "整体结论：%s（签到达成即整体成功）" % status,
+    ])
+
+
+def push_wecom_webhook(webhook, checkin_line, buddy_line, overall_ok):
+    """推送到企业微信群机器人（推荐渠道，最简单）。
+
+    webhook 可填完整地址，也可只填 key（自动补全为官方地址）：
+        https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=xxxxxxxx-...
+    服务端返回 errcode == 0 视为成功。
+    """
+    url = (webhook if webhook.startswith("http")
+           else "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=" + webhook)
+    payload = {"msgtype": "markdown",
+               "markdown": {"content": build_notify_markdown(checkin_line, buddy_line, overall_ok)}}
+    scode, body = request(url, {"Content-Type": "application/json"},
+                          method="POST", payload=payload)
+    log("  [企业微信] HTTP %s %s" % (scode, json.dumps(body, ensure_ascii=False)))
+    return (200 <= scode < 300 and isinstance(body, dict) and body.get("errcode") == 0)
+
+
+def push_wecom_app(corpid, corpsecret, agentid, touser,
+                   checkin_line, buddy_line, overall_ok):
+    """以企业微信自建应用身份推送（可指定接收人，默认 @all）。
+
+    需要企业微信管理后台四件套：corpid、应用 secret、agentid，
+    且接收人在应用可见范围内。markdown 消息仅在企业微信客户端内查看。
+    """
+    try:
+        agentid = int(agentid)
+    except (TypeError, ValueError):
+        log("  [企业微信] agentid 不是数字：%r" % (agentid,))
+        return False
+
+    token_url = ("https://qyapi.weixin.qq.com/cgi-bin/gettoken"
+                 "?corpid=%s&corpsecret=%s"
+                 % (urllib.parse.quote(corpid), urllib.parse.quote(corpsecret)))
+    tcode, tbody = get(token_url, {})
+    token = None
+    if 200 <= tcode < 300 and isinstance(tbody, dict) and tbody.get("errcode") == 0:
+        token = tbody.get("access_token")
+    if not token:
+        log("  [企业微信] 获取 access_token 失败：HTTP %s %s"
+            % (tcode, json.dumps(tbody, ensure_ascii=False)))
+        return False
+
+    send_url = "https://qyapi.weixin.qq.com/cgi-bin/message/send?access_token=%s" % token
+    payload = {
+        "touser": touser or "@all",
+        "msgtype": "markdown",
+        "agentid": agentid,
+        "markdown": {"content": build_notify_markdown(checkin_line, buddy_line, overall_ok)},
+        "safe": 0,
+        "enable_duplicate_check": 0,
+    }
+    scode, body = post(send_url, {"Content-Type": "application/json"}, payload)
+    log("  [企业微信] HTTP %s %s" % (scode, json.dumps(body, ensure_ascii=False)))
+    return (200 <= scode < 300 and isinstance(body, dict) and body.get("errcode") == 0)
+
 
 def push_feishu(webhook, title, checkin_line, buddy_line, overall_ok):
-    """推送到飞书自定义机器人。签到与猫猫状态分开成行。"""
+    """（兼容渠道）推送到飞书自定义机器人。签到与猫猫状态分开成行。"""
     color = "green" if overall_ok else "red"
     lines = [
         "**%s**" % title,
@@ -334,14 +410,20 @@ def push_feishu(webhook, title, checkin_line, buddy_line, overall_ok):
 
 def main():
     token = os.environ.get("WB_ACCESS_TOKEN")
-    webhook = os.environ.get("FEISHU_WEBHOOK")
+    # 推送渠道按优先级择一：企业微信群机器人 → 企业微信应用消息 → 飞书
+    wecom_webhook = os.environ.get("WECOM_WEBHOOK")
+    wecom_corpid = os.environ.get("WECOM_CORPID")
+    wecom_corpsecret = os.environ.get("WECOM_CORPSECRET")
+    wecom_agentid = os.environ.get("WECOM_AGENTID")
+    wecom_touser = os.environ.get("WECOM_TOUSER") or "@all"
+    feishu_webhook = os.environ.get("FEISHU_WEBHOOK")
     endpoint = os.environ.get("WB_ENDPOINT") or DEFAULT_ENDPOINT
 
     if not token:
         log("缺少环境变量 WB_ACCESS_TOKEN（请在本机运行 refresh_token.py 注入 GitHub Secret）")
         return 2
-    if not webhook:
-        log("缺少环境变量 FEISHU_WEBHOOK")
+    if not (wecom_webhook or (wecom_corpid and wecom_corpsecret and wecom_agentid) or feishu_webhook):
+        log("未配置推送渠道（WECOM_WEBHOOK 或 WECOM_CORPID+WECOM_CORPSECRET+WECOM_AGENTID 或 FEISHU_WEBHOOK），本轮仅打印日志")
 
     headers = {
         "Accept": "application/json",
@@ -367,8 +449,13 @@ def main():
     checkin_line = ("✅ " if checkin_ok else "❌ ") + checkin["report"]
     buddy_line = ("🐱 " + buddy.get("report", "")) if buddy.get("report") else "🐱 无结论"
 
-    if webhook:
-        push_feishu(webhook, "每日自动化", checkin_line, buddy_line, overall_ok)
+    if wecom_webhook:
+        push_wecom_webhook(wecom_webhook, checkin_line, buddy_line, overall_ok)
+    elif wecom_corpid and wecom_corpsecret and wecom_agentid:
+        push_wecom_app(wecom_corpid, wecom_corpsecret, wecom_agentid, wecom_touser,
+                       checkin_line, buddy_line, overall_ok)
+    elif feishu_webhook:
+        push_feishu(feishu_webhook, "每日自动化", checkin_line, buddy_line, overall_ok)
 
     result = {
         "checkin": {"ok": checkin_ok, **checkin},

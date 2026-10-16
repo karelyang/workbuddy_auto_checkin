@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 570" width="720" height="570" role="img" aria-label="数据流：本机导出 token → GitHub Secret → Actions 定时执行 → 飞书推送">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 570" width="720" height="570" role="img" aria-label="数据流：本机导出 token → GitHub Secret → Actions 定时执行 → 企业微信推送">
   <style>
     .bg    { fill: #ffffff; }
     .box   { fill: #f6f8fa; stroke: #d0d7de; stroke-width: 1.5; }
@@ -38,16 +38,16 @@
   <!-- 2. Secret -->
   <rect class="box" x="170" y="165" width="520" height="90" rx="10"/>
   <text class="fg"    x="190" y="198" font-size="15" font-weight="600">GitHub Secret</text>
-  <text class="muted" x="190" y="224" font-size="12.5">WB_ACCESS_TOKEN / FEISHU_WEBHOOK　·　仓库内不含任何凭据</text>
+  <text class="muted" x="190" y="224" font-size="12.5">WB_ACCESS_TOKEN / WECOM_WEBHOOK　·　仓库内不含任何凭据</text>
 
   <!-- 3. Actions -->
   <rect class="boxhi" x="170" y="305" width="520" height="90" rx="10"/>
   <text class="fg"    x="190" y="338" font-size="15" font-weight="600">GitHub Actions · 每天 3 次</text>
   <text class="muted" x="190" y="364" font-size="12.5">wb_auto.py：签到 / 领奖 / 派出　·　HTTPS ↔ copilot.tencent.com</text>
 
-  <!-- 4. 飞书 -->
+  <!-- 4. 企业微信 -->
   <rect class="box" x="170" y="445" width="520" height="90" rx="10"/>
-  <text class="fg"    x="190" y="478" font-size="15" font-weight="600">飞书群机器人</text>
+  <text class="fg"    x="190" y="478" font-size="15" font-weight="600">企业微信群机器人</text>
   <text class="muted" x="190" y="504" font-size="12.5">卡片分开汇报：签到结论 + 猫猫结论</text>
 
   <!-- 连接标注 -->

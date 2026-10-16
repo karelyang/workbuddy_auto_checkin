@@ -1,6 +1,6 @@
 # workbuddy_auto_checkin
 
-WorkBuddy「Buddy 加油站」的每日自动化：**签到领积分**、**派猫猫旅行并领回礼物**，结果推送到飞书。
+WorkBuddy「Buddy 加油站」的每日自动化：**签到领积分**、**派猫猫旅行并领回礼物**，结果推送到企业微信（兼容飞书）。
 
 跑在 GitHub Actions 上，按 cron 每天定时执行，不需要任何常开设备。
 
@@ -19,7 +19,7 @@ WorkBuddy「Buddy 加油站」的每日自动化：**签到领积分**、**派�
 ┌──────────────────┐    gh secret   ┌────────────────────┐
 │ refresh_token.py │ ─────────────► │ Secret:            │
 │  读登录态 → 解密 │                │  WB_ACCESS_TOKEN   │
-└──────────────────┘                │  FEISHU_WEBHOOK    │
+└──────────────────┘                │  WECOM_WEBHOOK    │
                                     └─────────┬──────────┘
                                               │ 每天 cron
                                     ┌─────────▼──────────┐        ┌──────────────┐
@@ -28,7 +28,7 @@ WorkBuddy「Buddy 加油站」的每日自动化：**签到领积分**、**派�
                                     └─────────┬──────────┘        └──────────────┘
                                               │ webhook
                                     ┌─────────▼──────────┐
-                                    │ 飞书群机器人卡片    │
+                                    │ 企业微信群机器人    │
                                     └────────────────────┘
 ```
 
@@ -44,12 +44,12 @@ WorkBuddy「Buddy 加油站」的每日自动化：**签到领积分**、**派�
 
 - 一个 GitHub 账号
 - 一台装过 WorkBuddy **并且登录过**的电脑（只在配置时用一次）
-- 一个飞书群（自己建一个只有自己的也行），用来收消息
+- 一个企业微信账号（个人可以注册一个只有自己的企业），建一个只有自己的群加自定义机器人，用来收消息
 - 电脑上有 Python 3.8+
 
 ### 容易搞混的一点，先说清楚
 
-下面所有命令和配置里出现的仓库名，指的都是**你自己**的那个仓库（`你的用户名/workbuddy_auto_checkin`），**不是**原作者的 `FXmonkey/workbuddy_auto_checkin`。原作者的仓库只是让你 Fork 的源头，你的凭证和定时任务都配在你自己的仓库里。
+下面所有命令和配置里出现的仓库名，指的都是**你自己**的那个仓库（本仓库为 `karelyang/workbuddy_auto_checkin`，Fork 后即为 `你的用户名/workbuddy_auto_checkin`）。Fork 源头只是代码来源，你的凭证和定时任务都配在 Fork 出来的自己的仓库里。
 
 ### 第 1 步：把项目复制到自己账号下
 
@@ -57,7 +57,7 @@ WorkBuddy「Buddy 加油站」的每日自动化：**签到领积分**、**派�
 
 **方式 A：Fork（推荐）**
 
-1. 打开项目页 `https://github.com/FXmonkey/workbuddy_auto_checkin`
+1. 打开项目页 `https://github.com/karelyang/workbuddy_auto_checkin`
 2. 点右上角 **Fork** → **Create fork**
 3. 完成后你就有了 `你的用户名/workbuddy_auto_checkin`
 4. **fork 完必须多做一步**：进你 fork 出来的仓库 → 点上方 **Actions** 页签 → 页面中间会有一行提示，点 **I understand my workflows, go ahead and enable them** 启用。**不启用的话定时任务不会跑。**
@@ -75,13 +75,16 @@ WorkBuddy「Buddy 加油站」的每日自动化：**签到领积分**、**派�
 后面要在你电脑上跑一次脚本导凭证，所以先把代码拿到本地。两种都行：
 
 - 网页下载：你的仓库页 → 绿色 **Code** 按钮 → **Download ZIP** → 解压
-- 或用 git：`git clone https://github.com/FXmonkey/workbuddy_auto_checkin.git`
+- 或用 git：`git clone https://github.com/你的用户名/workbuddy_auto_checkin.git`
 
-### 第 3 步：拿一个飞书机器人地址
+### 第 3 步：拿一个企业微信机器人地址
 
-1. 在飞书里建一个群（只有你自己也行）
-2. 群设置 → **群机器人** → **添加机器人** → **自定义机器人**
-3. 复制它给你的地址，形如 `https://open.feishu.cn/open-apis/bot/v2/hook/xxxxxxxx`
+1. 注册/登录企业微信；只是个人使用的话，创建一个只有自己的企业即可
+2. 在企业微信里建一个群（只有你自己也行）
+3. 群设置 → **群机器人** → **添加机器人** → **自定义机器人**
+4. 复制它给你的地址，形如 `https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`（只复制 `key=` 后面那一串也可以，脚本会自动补全地址）
+
+> 不想建群、想把消息发到自己手机上？可以用企业微信「自建应用消息」渠道，四件套配置见 [部署指南-企业微信.md](部署指南-企业微信.md) 方案 B。
 
 ### 第 4 步：导出登录凭证（二选一）
 
@@ -120,9 +123,9 @@ python refresh_token.py
 | Name | Secret 里填什么 |
 | --- | --- |
 | `WB_ACCESS_TOKEN` | 第 4 步方式 B 复制的那串字符 |
-| `FEISHU_WEBHOOK` | 第 3 步拿到的飞书机器人地址 |
+| `WECOM_WEBHOOK` | 第 3 步拿到的企业微信机器人地址 |
 
-> 方式 A 已经自动写入 `WB_ACCESS_TOKEN` 的，这里只需要再填 `FEISHU_WEBHOOK` 一条。
+> 方式 A 已经自动写入 `WB_ACCESS_TOKEN` 的，这里只需要再填 `WECOM_WEBHOOK` 一条。
 > 填完这个页面应该能看到两条记录（如上面截图所示）。
 
 ### 第 6 步：手动跑一次验证
@@ -130,9 +133,9 @@ python refresh_token.py
 1. 打开你的仓库 → 点上方 **Actions** 页签
 2. 左侧选 **Buddy 加油站每日自动化**
 3. 右侧点 **Run workflow** 下拉，再点绿色的 **Run workflow**
-4. 等十几秒，刷新页面，飞书应该收到一条消息
+4. 等十几秒，刷新页面，企业微信应该收到一条消息
 
-> 这个页面显示绿色不代表签到一定成功（猫猫出问题不影响整体结论）。**以飞书收到的消息为准。**
+> 这个页面显示绿色不代表签到一定成功（猫猫出问题不影响整体结论）。**以企业微信收到的消息为准。**
 
 ## 配置项
 
@@ -141,7 +144,12 @@ python refresh_token.py
 | 变量 | 必填 | 默认 | 说明 |
 | --- | --- | --- | --- |
 | `WB_ACCESS_TOKEN` | 是 | — | 访问令牌。缺失则直接退出（exit 2） |
-| `FEISHU_WEBHOOK` | 建议 | — | 飞书自定义机器人地址。缺失则不推送，仅打印日志 |
+| `WECOM_WEBHOOK` | 建议 | — | 企业微信群机器人地址（完整 URL 或只填 key）。缺失则不推送，仅打印日志 |
+| `WECOM_CORPID` | 备选 | — | 企业微信 corpid（自建应用消息渠道，与 `WECOM_WEBHOOK` 互斥，后者优先；四个变量需齐全才生效） |
+| `WECOM_CORPSECRET` | 备选 | — | 企业微信自建应用的 secret |
+| `WECOM_AGENTID` | 备选 | — | 企业微信自建应用 AgentId |
+| `WECOM_TOUSER` | 否 | `@all` | 应用消息的接收人 UserID，多个用 `|` 分隔；默认应用可见范围全员 |
+| `FEISHU_WEBHOOK` | 兼容 | — | 飞书自定义机器人地址（旧配置仍有效，优先级最低） |
 | `WB_ENDPOINT` | 否 | `https://copilot.tencent.com` | 接口地址 |
 | `WB_RESULT_FILE` | 否 | — | 写入 Markdown 汇总表，供 Actions 的 step summary 使用 |
 
@@ -181,7 +189,7 @@ python refresh_token.py
 | `1` | 签到未达成（猫猫失败不在此列） |
 | `2` | 缺少 `WB_ACCESS_TOKEN` |
 
-workflow 中脚本以 `exit 0` 收尾，只对未完成项发 `::warning::`，因此一次运行显示绿色不代表签到一定成功——**以日志、step summary 与飞书卡片为准**。
+workflow 中脚本以 `exit 0` 收尾，只对未完成项发 `::warning::`，因此一次运行显示绿色不代表签到一定成功——**以日志、step summary 与企业微信消息为准**。
 
 ## 接口
 
@@ -217,13 +225,13 @@ refresh_token.py              本机一次性操作：导出 token / 写入 Secr
 
 ## 常见问题
 
-**令牌过期** — token 由客户端签发，有效期约 28 天（`expiresIn` 2419200）。日志或飞书出现「认证被拒」时，本机重跑 `python refresh_token.py --gh-repo OWNER/REPO` 覆盖即可（`OWNER/REPO` 换成你自己的仓库）。
+**令牌过期** — token 由客户端签发，有效期约 28 天（`expiresIn` 2419200）。日志或推送消息出现「认证被拒」时，本机重跑 `python refresh_token.py --gh-repo OWNER/REPO` 覆盖即可（`OWNER/REPO` 换成你自己的仓库）。
 
 **fork 之后 Actions 页签是空的** — fork 来的仓库默认不启用 Actions。进 Actions 页签，点页面中间的 **I understand my workflows, go ahead and enable them** 启用一次即可。
 
 **Actions 页签看不到 workflow** — 确认 `.github/workflows/daily.yml` 已入库，且仓库的 Actions 功能未被禁用。
 
-**飞书没收到卡片** — 日志中 `[飞书]` 行会打印服务端返回码。`19001` 表示 webhook 地址无效或复制不完整。
+**企业微信没收到消息** — 日志中 `[企业微信]` 行会打印服务端返回。`errcode` 非 0 即未送达：`93000` 多为 key 无效或地址复制不完整，`45009` 为触发机器人限速（本脚本日频不会触发）；也确认机器人仍在群里。
 
 **偶发 302** — 高频轮询旅行状态时网关会短暂跳转，请求层已对 3xx 退避重试。按日频执行不会触发。
 

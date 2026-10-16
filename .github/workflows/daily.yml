@@ -49,6 +49,14 @@ jobs:
         id: run
         env:
           WB_ACCESS_TOKEN: ${{ secrets.WB_ACCESS_TOKEN }}
+          # 企业微信群机器人（推荐）：完整地址或只填 key 均可
+          WECOM_WEBHOOK: ${{ secrets.WECOM_WEBHOOK }}
+          # 企业微信自建应用消息（备选渠道；与上行互斥，群机器人优先，四个变量需齐全）
+          WECOM_CORPID: ${{ secrets.WECOM_CORPID }}
+          WECOM_CORPSECRET: ${{ secrets.WECOM_CORPSECRET }}
+          WECOM_AGENTID: ${{ secrets.WECOM_AGENTID }}
+          WECOM_TOUSER: ${{ secrets.WECOM_TOUSER }}
+          # 飞书（兼容旧配置，优先级最低）
           FEISHU_WEBHOOK: ${{ secrets.FEISHU_WEBHOOK }}
           WB_ENDPOINT: https://copilot.tencent.com
           WB_RESULT_FILE: ${{ runner.temp }}/wb_result.json
@@ -63,7 +71,7 @@ jobs:
           # 签到成功即成功：脚本自身已把猫猫失败与签到结论解耦，
           # 这里统一以 0 退出，仅用 warning 提示存在未完成项。
           if [ "$code" -ne 0 ]; then
-            echo "::warning::本轮存在未完成项，详见上方日志与飞书卡片"
+            echo "::warning::本轮存在未完成项，详见上方日志与推送消息"
           fi
           exit 0
 
